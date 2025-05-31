@@ -1,0 +1,536 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: PokerPoint Backend
+Transform: [AWS::LanguageExtensions, AWS::Serverless-2016-10-31]
+
+Globals:
+  Function:
+    Timeout: 30
+    CodeUri: ..
+    Runtime: nodejs22.x
+    Architectures:
+      - arm64
+    MemorySize: 1024
+
+Resources:
+  JiraTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-jira-tokens
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  RoomTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-rooms
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: roomId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: roomId
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  VoteTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-votes
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: roomId
+          AttributeType: S
+        - AttributeName: connectionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: roomId
+          KeyType: HASH
+        - AttributeName: connectionId
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: roomId-index
+          KeySchema:
+            - AttributeName: roomId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: connectionId-index
+          KeySchema:
+            - AttributeName: connectionId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  ConnectionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-websocket-connections
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: roomId
+          AttributeType: S
+        - AttributeName: connectionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: roomId
+          KeyType: HASH
+        - AttributeName: connectionId
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: roomId-index
+          KeySchema:
+            - AttributeName: roomId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: connectionId-index
+          KeySchema:
+            - AttributeName: connectionId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  CreateRoomFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/create-room-function/src/create-room.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/CreateRoomFunction
+      Environment:
+        Variables:
+          RoomTable: !Ref RoomTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomTable
+
+  CreateRoomFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/CreateRoomFunction
+      RetentionInDays: 7
+
+  JiraCallbackFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/jira-callback-function/src/jira-callback.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/JiraCallbackFunction
+      Environment:
+        Variables:
+          JiraTable: !Ref JiraTable
+          JiraClientId: HDIuLGOg69GDy95TMXopOPGXJAdN0sdf
+          JiraClientSecret: ATOAmku1s7OoSlC0i-uwCJq3gW4xniw24RIk56ewym2estODGCTUEyzwFbXul8SK6uFRE68BA592
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JiraTable
+
+  JiraCallbackFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/JiraCallbackFunction
+      RetentionInDays: 7
+
+  JiraSearchFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/jira-search-function/src/jira-search.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/JiraSearchFunction
+      Environment:
+        Variables:
+          JiraTable: !Ref JiraTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JiraTable
+
+  JiraSearchFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/JiraSearchFunction
+      RetentionInDays: 7
+
+  #########
+  # APIGW #
+  #########
+  PublicAPIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-public-api
+      Description: Public API Gateway for PokerPoint API
+      StageName: production
+      TracingEnabled: true
+      MethodSettings:
+        - LoggingLevel: INFO
+          ResourcePath: "/*"
+          HttpMethod: "*"
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+      AccessLogSetting:
+        DestinationArn: !GetAtt PublicApiAccessLogGroup.Arn
+        Format:
+          Fn::ToJsonString:
+            requestId: $context.requestId
+            ip: $context.identity.sourceIp
+            requestTime: $context.requestTime
+            httpMethod: $context.httpMethod
+            path: $context.path
+            routeKey: $context.routeKey
+            status: $context.status
+            protocol: $context.protocol
+            responseLatency: $context.responseLatency
+            responseLength: $context.responseLength
+      DefinitionBody:
+        openapi: 3.0.1
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: public-api.yaml
+      OpenApiVersion: 3.0.1
+      EndpointConfiguration:
+        Type: REGIONAL
+
+  PublicApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/vendedlogs/apigateway/${AWS::StackName}-public-AccessLogs
+      RetentionInDays: 7
+
+  ExecuteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Role to allow API Gateway to invoke a Lambda function
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: apigateway.amazonaws.com
+      Policies:
+        - PolicyName: AllowLambdaInvoke
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource: "*"
+                Action:
+                  - lambda:InvokeFunction
+
+  ##############
+  # Web Socket #
+  ##############
+  WebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: WebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  WebSocketAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/vendedlogs/apigateway/${AWS::StackName}-websocket-AccessLogs
+      RetentionInDays: 7
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    Properties:
+      ApiId: !Ref WebSocket
+    DependsOn:
+      - ConnectRoute
+      - DisconnectRoute
+      - DefaultRoute
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: production
+      ApiId: !Ref WebSocket
+      DeploymentId: !Ref Deployment
+
+
+  WebSocketDomainCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: wss.pokerpoint.co.uk
+      DomainValidationOptions:
+        - DomainName: wss.pokerpoint.co.uk
+          HostedZoneId: !ImportValue dns-ZoneId
+      ValidationMethod: DNS
+
+  WebSocketDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: wss.pokerpoint.co.uk
+      DomainNameConfigurations:
+        - CertificateArn: !Ref WebSocketDomainCertificate
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  WebSocketBasePathMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      DomainName: !Ref WebSocketDomainName
+      ApiId: !Ref WebSocket
+      Stage: !Ref Stage
+      ApiMappingKey: ""
+
+  WebSocketDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: wss.pokerpoint.co.uk
+      Type: A
+      HostedZoneId: !ImportValue dns-ZoneId
+      AliasTarget:
+        DNSName: !GetAtt WebSocketDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt WebSocketDomainName.RegionalHostedZoneId
+        EvaluateTargetHealth: false
+
+  ConnectFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/websocket/src/connect.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/ConnectFunction
+      Environment:
+        Variables:
+          ApiId: !Ref WebSocket
+      Policies:
+        - Statement:
+            Effect: Allow
+            Action: execute-api:*
+            Resource: "*"
+
+  ConnectFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/ConnectFunction
+      RetentionInDays: 7
+
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectFunction.Arn}/invocations
+      IntegrationMethod: POST
+      PayloadFormatVersion: "1.0"
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocket
+      RouteKey: $connect
+      Target:
+        Fn::Sub: integrations/${ConnectIntegration}
+
+  ConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocket}/*/$connect
+
+  DisconnectFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/websocket/src/disconnect.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/DisconnectFunction
+      Environment:
+        Variables:
+          ConnectionTable: !Ref ConnectionTable
+          ApiId: !Ref WebSocket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionTable
+        - Statement:
+            Effect: Allow
+            Action: execute-api:*
+            Resource: "*"
+
+  DisconnectFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/DisconnectFunction
+      RetentionInDays: 7
+
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DisconnectFunction.Arn}/invocations
+      IntegrationMethod: POST
+      PayloadFormatVersion: "1.0"
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocket
+      RouteKey: $disconnect
+      Target:
+        Fn::Sub: integrations/${DisconnectIntegration}
+
+  DisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocket}/*/$disconnect
+
+  DefaultFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/websocket/src/default.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/DefaultFunction
+      Environment:
+        Variables:
+          RoomTable: !Ref RoomTable
+          ConnectionTable: !Ref ConnectionTable
+          VoteTable: !Ref VoteTable
+          JiraTable: !Ref JiraTable
+          ApiId: !Ref WebSocket
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref VoteTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JiraTable
+        - Statement:
+            Effect: Allow
+            Action: execute-api:*
+            Resource: "*"
+
+  DefaultFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/DefaultFunction
+      RetentionInDays: 7
+
+  DefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocket
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DefaultFunction.Arn}/invocations
+      IntegrationMethod: POST
+      PayloadFormatVersion: "1.0"
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocket
+      RouteKey: $default
+      Target: !Sub integrations/${DefaultIntegration}
+
+  DefaultPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DefaultFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocket}/*/$default
+
+  ################
+  # Domain Setup #
+  ###############
+
+  RestAPIDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: api.pokerpoint.co.uk
+      DomainNameConfigurations:
+        - CertificateArn: !Ref RestAPIDomainCertificate
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  RestAPIDomainCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: api.pokerpoint.co.uk
+      DomainValidationOptions:
+        - DomainName: api.pokerpoint.co.uk
+          HostedZoneId: !ImportValue dns-ZoneId
+      ValidationMethod: DNS
+
+  RestApiBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref RestAPIDomainName
+      RestApiId: !Ref PublicAPIGateway
+      Stage: !Ref Stage
+
+  RestAPIDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Ref RestAPIDomainName
+      Type: A
+      HostedZoneId: !ImportValue dns-ZoneId
+      AliasTarget:
+        DNSName: !GetAtt RestAPIDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt RestAPIDomainName.RegionalHostedZoneId
+        EvaluateTargetHealth: false
+
+Outputs:
+  PublicAPIGatewayURL:
+    Description: URL for the Public API Gateway
+    Value: !Sub https://${PublicAPIGateway}.execute-api.${AWS::Region}.amazonaws.com/production
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicAPIGatewayURL
+
+  DomainURL:
+    Description: Domain Name the Public API Gateway
+    Value: !Ref RestAPIDomainName
+    Export:
+      Name: !Sub ${AWS::StackName}-DomainURL
