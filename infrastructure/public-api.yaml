@@ -1,0 +1,121 @@
+openapi: "3.0.1"
+info:
+  title: "PokerPoint API"
+  version: "1.0"
+
+paths:
+
+  /jira/callback:
+    options:
+      summary: "CORS support"
+      responses:
+        '200':
+          description: "CORS preflight response"
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: '{ "statusCode": 200 }'
+        responses:
+          default:
+            statusCode: 200
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS,GET'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+
+    get:
+      responses:
+        200:
+          description: ""
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+        500:
+          description: "Internal server error"
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+      x-amazon-apigateway-request-validator: "Validate both"
+      x-amazon-apigateway-integration:
+        httpMethod: "POST"
+        passThroughBehavior: "when_no_templates"
+        type: "aws_proxy"
+        credentials:
+          Fn::Sub: ${ExecuteLambdaRole.Arn}
+        uri:
+          Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${JiraCallbackFunction.Arn}/invocations
+
+  /create-room:
+    options:
+      summary: "CORS support for /create-room"
+      responses:
+        '200':
+          description: "CORS preflight response"
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: '{ "statusCode": 200 }'
+        responses:
+          default:
+            statusCode: 200
+            responseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roomName:
+                  type: string
+                cards:
+                  type: array
+      responses:
+        200:
+          description: "Room has been created successfully"
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+        500:
+          description: "Internal server error"
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+      x-amazon-apigateway-request-validator: "Validate both"
+      x-amazon-apigateway-integration:
+        httpMethod: "POST"
+        passThroughBehavior: "when_no_templates"
+        type: "aws_proxy"
+        credentials:
+          Fn::Sub: ${ExecuteLambdaRole.Arn}
+        uri:
+          Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateRoomFunction.Arn}/invocations
