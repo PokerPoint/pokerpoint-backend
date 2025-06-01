@@ -20,7 +20,7 @@ const CORS_HEADERS = {
     "Access-Control-Allow-Methods": "OPTIONS,POST",
 };
 
-export class CreateRoom implements LambdaInterface {
+export class CreateRoomHandler implements LambdaInterface {
     public async handler(
         event: APIGatewayEvent,
         _context: Context
@@ -109,5 +109,5 @@ export class CreateRoom implements LambdaInterface {
     }
 }
 
-const handlerClass = new CreateRoom();
+const handlerClass = new CreateRoomHandler();
 export const lambdaHandler = handlerClass.handler.bind(handlerClass);

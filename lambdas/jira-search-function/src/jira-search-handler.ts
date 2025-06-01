@@ -14,7 +14,7 @@ const CORS_HEADERS = {
     "Access-Control-Allow-Methods": "GET,OPTIONS,POST",
 };
 
-export class JiraSearch implements LambdaInterface {
+export class JiraSearchHandler implements LambdaInterface {
     public async handler(
         event: APIGatewayEvent,
         _context: Context
@@ -83,5 +83,5 @@ export class JiraSearch implements LambdaInterface {
     }
 }
 
-const handlerClass = new JiraSearch();
+const handlerClass = new JiraSearchHandler();
 export const lambdaHandler = handlerClass.handler.bind(handlerClass);

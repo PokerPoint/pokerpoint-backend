@@ -22,7 +22,7 @@ const apiGateway = new AWS.ApiGatewayManagementApi({
     endpoint: process.env.ApiId + ".execute-api." + process.env.AWS_REGION + ".amazonaws.com/production"
 });
 
-export class Default implements LambdaInterface {
+export class DefaultHandler implements LambdaInterface {
     public async handler(event: APIGatewayEvent): Promise<{ statusCode: number }> {
         logger.info("Entry handler")
         try {
@@ -402,5 +402,5 @@ function getTTL() {
     return `${Math.floor(Date.now() / 1000) + 28800}`;
 }
 
-const handlerClass = new Default();
+const handlerClass = new DefaultHandler();
 export const lambdaHandler = handlerClass.handler.bind(handlerClass);

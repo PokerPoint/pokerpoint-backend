@@ -4,7 +4,7 @@ import {Logger} from "@aws-lambda-powertools/logger";
 
 const logger = new Logger();
 
-export class Connect implements LambdaInterface {
+export class ConnectHandler implements LambdaInterface {
     public async handler(event: APIGatewayEvent): Promise<{ statusCode: number }> {
         const connectionId = event.requestContext.connectionId;
         logger.info("Connection ID " + connectionId)
@@ -13,5 +13,5 @@ export class Connect implements LambdaInterface {
     }
 }
 
-const handlerClass = new Connect();
+const handlerClass = new ConnectHandler();
 export const lambdaHandler = handlerClass.handler.bind(handlerClass);
