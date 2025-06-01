@@ -89,12 +89,6 @@ export class JiraCallback implements LambdaInterface {
                 return { statusCode: 400, body: "Invalid state format" };
             }
 
-            logger.info("userId=" + userId)
-            logger.info("roomId=" + roomId)
-            logger.info("accessToken=" + accessToken)
-            logger.info("expiresAt=" + expiresAt)
-            logger.info("cloudId=" + cloudId)
-
             await dynamodbClient.send(new PutItemCommand({
                 TableName: jiraTable,
                 Item: {
