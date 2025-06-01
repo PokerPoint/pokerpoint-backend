@@ -12,7 +12,7 @@ const apiGateway = new AWS.ApiGatewayManagementApi({
     endpoint: process.env.ApiId + ".execute-api." + process.env.AWS_REGION + ".amazonaws.com/production"
 });
 
-export class Disconnect implements LambdaInterface {
+export class DisconnectHandler implements LambdaInterface {
     public async handler(event: APIGatewayEvent): Promise<{ statusCode: number }> {
         try {
             await sleep(1000);
@@ -87,5 +87,5 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-const handlerClass = new Disconnect();
+const handlerClass = new DisconnectHandler();
 export const lambdaHandler = handlerClass.handler.bind(handlerClass);

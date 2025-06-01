@@ -1,5 +1,5 @@
 {
-  "name": "websocket",
+  "name": "ws-connect-function",
   "dependencies": {
     "aws-sdk": "^2.1692.0"
   }

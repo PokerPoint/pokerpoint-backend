@@ -2,6 +2,16 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: PokerPoint Backend
 Transform: [AWS::LanguageExtensions, AWS::Serverless-2016-10-31]
 
+Parameters:
+  Environment:
+    Type: String
+    Default: development
+    AllowedValues: [ development, staging, production ]
+
+  BaseDomainName:
+    Type: String
+    Default: pokerpoint.co.uk
+
 Globals:
   Function:
     Timeout: 30
@@ -106,77 +116,6 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  CreateRoomFunction:
-    Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Sourcemap: true
-    Properties:
-      Handler: lambdas/create-room-function/src/create-room.lambdaHandler
-      LoggingConfig:
-        LogGroup: !Sub /aws/lambda/${AWS::StackName}/CreateRoomFunction
-      Environment:
-        Variables:
-          RoomTable: !Ref RoomTable
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref RoomTable
-
-  CreateRoomFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/CreateRoomFunction
-      RetentionInDays: 7
-
-  JiraCallbackFunction:
-    Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Sourcemap: true
-    Properties:
-      Handler: lambdas/jira-callback-function/src/jira-callback.lambdaHandler
-      LoggingConfig:
-        LogGroup: !Sub /aws/lambda/${AWS::StackName}/JiraCallbackFunction
-      Environment:
-        Variables:
-          JiraTable: !Ref JiraTable
-          JiraClientId: HDIuLGOg69GDy95TMXopOPGXJAdN0sdf
-          JiraClientSecret: ATOAmku1s7OoSlC0i-uwCJq3gW4xniw24RIk56ewym2estODGCTUEyzwFbXul8SK6uFRE68BA592
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JiraTable
-
-  JiraCallbackFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/JiraCallbackFunction
-      RetentionInDays: 7
-
-  JiraSearchFunction:
-    Type: AWS::Serverless::Function
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Sourcemap: true
-    Properties:
-      Handler: lambdas/jira-search-function/src/jira-search.lambdaHandler
-      LoggingConfig:
-        LogGroup: !Sub /aws/lambda/${AWS::StackName}/JiraSearchFunction
-      Environment:
-        Variables:
-          JiraTable: !Ref JiraTable
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref JiraTable
-
-  JiraSearchFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/JiraSearchFunction
-      RetentionInDays: 7
-
   #########
   # APIGW #
   #########
@@ -185,7 +124,7 @@ Resources:
     Properties:
       Name: !Sub ${AWS::StackName}-public-api
       Description: Public API Gateway for PokerPoint API
-      StageName: production
+      StageName: !Ref Environment
       TracingEnabled: true
       MethodSettings:
         - LoggingLevel: INFO
@@ -246,6 +185,77 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
 
+  CreateRoomFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/create-room-function/src/create-room-handler.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/CreateRoomFunction
+      Environment:
+        Variables:
+          RoomTable: !Ref RoomTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomTable
+
+  CreateRoomFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/CreateRoomFunction
+      RetentionInDays: 7
+
+  JiraCallbackFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/jira-callback-function/src/jira-callback-handler.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/JiraCallbackFunction
+      Environment:
+        Variables:
+          JiraTable: !Ref JiraTable
+          JiraClientId: HDIuLGOg69GDy95TMXopOPGXJAdN0sdf
+          JiraClientSecret: ATOAmku1s7OoSlC0i-uwCJq3gW4xniw24RIk56ewym2estODGCTUEyzwFbXul8SK6uFRE68BA592
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JiraTable
+
+  JiraCallbackFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/JiraCallbackFunction
+      RetentionInDays: 7
+
+  JiraSearchFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/jira-search-function/src/jira-search-handler.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/JiraSearchFunction
+      Environment:
+        Variables:
+          JiraTable: !Ref JiraTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JiraTable
+
+  JiraSearchFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/JiraSearchFunction
+      RetentionInDays: 7
+
   ##############
   # Web Socket #
   ##############
@@ -274,47 +284,9 @@ Resources:
   Stage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
-      StageName: production
+      StageName: !Ref Environment
       ApiId: !Ref WebSocket
       DeploymentId: !Ref Deployment
-
-
-  WebSocketDomainCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: wss.pokerpoint.co.uk
-      DomainValidationOptions:
-        - DomainName: wss.pokerpoint.co.uk
-          HostedZoneId: !ImportValue dns-ZoneId
-      ValidationMethod: DNS
-
-  WebSocketDomainName:
-    Type: AWS::ApiGatewayV2::DomainName
-    Properties:
-      DomainName: wss.pokerpoint.co.uk
-      DomainNameConfigurations:
-        - CertificateArn: !Ref WebSocketDomainCertificate
-          EndpointType: REGIONAL
-          SecurityPolicy: TLS_1_2
-
-  WebSocketBasePathMapping:
-    Type: AWS::ApiGatewayV2::ApiMapping
-    Properties:
-      DomainName: !Ref WebSocketDomainName
-      ApiId: !Ref WebSocket
-      Stage: !Ref Stage
-      ApiMappingKey: ""
-
-  WebSocketDomainRecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      Name: wss.pokerpoint.co.uk
-      Type: A
-      HostedZoneId: !ImportValue dns-ZoneId
-      AliasTarget:
-        DNSName: !GetAtt WebSocketDomainName.RegionalDomainName
-        HostedZoneId: !GetAtt WebSocketDomainName.RegionalHostedZoneId
-        EvaluateTargetHealth: false
 
   ConnectFunction:
     Type: AWS::Serverless::Function
@@ -323,7 +295,7 @@ Resources:
       BuildProperties:
         Sourcemap: true
     Properties:
-      Handler: lambdas/websocket/src/connect.lambdaHandler
+      Handler: lambdas/ws-connect-function/src/connect-handler.lambdaHandler
       LoggingConfig:
         LogGroup: !Sub /aws/lambda/${AWS::StackName}/ConnectFunction
       Environment:
@@ -374,7 +346,7 @@ Resources:
       BuildProperties:
         Sourcemap: true
     Properties:
-      Handler: lambdas/websocket/src/disconnect.lambdaHandler
+      Handler: lambdas/ws-disconnect-function/src/disconnect-handler.lambdaHandler
       LoggingConfig:
         LogGroup: !Sub /aws/lambda/${AWS::StackName}/DisconnectFunction
       Environment:
@@ -428,7 +400,7 @@ Resources:
       BuildProperties:
         Sourcemap: true
     Properties:
-      Handler: lambdas/websocket/src/default.lambdaHandler
+      Handler: lambdas/ws-default-handler/src/default-handler.lambdaHandler
       LoggingConfig:
         LogGroup: !Sub /aws/lambda/${AWS::StackName}/DefaultFunction
       Environment:
@@ -489,7 +461,7 @@ Resources:
   RestAPIDomainName:
     Type: AWS::ApiGatewayV2::DomainName
     Properties:
-      DomainName: api.pokerpoint.co.uk
+      DomainName: !Sub api.${Environment}.${BaseDomainName}
       DomainNameConfigurations:
         - CertificateArn: !Ref RestAPIDomainCertificate
           EndpointType: REGIONAL
@@ -498,9 +470,9 @@ Resources:
   RestAPIDomainCertificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: api.pokerpoint.co.uk
+      DomainName: !Sub api.${Environment}.${BaseDomainName}
       DomainValidationOptions:
-        - DomainName: api.pokerpoint.co.uk
+        - DomainName: !Sub api.${Environment}.${BaseDomainName}
           HostedZoneId: !ImportValue dns-ZoneId
       ValidationMethod: DNS
 
@@ -520,6 +492,43 @@ Resources:
       AliasTarget:
         DNSName: !GetAtt RestAPIDomainName.RegionalDomainName
         HostedZoneId: !GetAtt RestAPIDomainName.RegionalHostedZoneId
+        EvaluateTargetHealth: false
+
+  WebSocketDomainCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub wss.${Environment}.${BaseDomainName}
+      DomainValidationOptions:
+        - DomainName: !Sub wss.${Environment}.${BaseDomainName}
+          HostedZoneId: !ImportValue dns-ZoneId
+      ValidationMethod: DNS
+
+  WebSocketDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Sub wss.${Environment}.${BaseDomainName}
+      DomainNameConfigurations:
+        - CertificateArn: !Ref WebSocketDomainCertificate
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  WebSocketBasePathMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      DomainName: !Ref WebSocketDomainName
+      ApiId: !Ref WebSocket
+      Stage: !Ref Stage
+      ApiMappingKey: ""
+
+  WebSocketDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: !Sub wss.${Environment}.${BaseDomainName}
+      Type: A
+      HostedZoneId: !ImportValue dns-ZoneId
+      AliasTarget:
+        DNSName: !GetAtt WebSocketDomainName.RegionalDomainName
+        HostedZoneId: !GetAtt WebSocketDomainName.RegionalHostedZoneId
         EvaluateTargetHealth: false
 
 Outputs:

@@ -1,0 +1,6 @@
+{
+  "name": "ws-disconenct-function",
+  "dependencies": {
+    "aws-sdk": "^2.1692.0"
+  }
+}

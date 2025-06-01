@@ -9,7 +9,7 @@ const jiraTable = process.env.JiraTable;
 
 const TTL_SECONDS = 28800; // 8 hours TTL
 
-export class JiraCallback implements LambdaInterface {
+export class JiraCallbackHandler implements LambdaInterface {
     public async handler(
         event: APIGatewayEvent,
         _context: Context
@@ -124,5 +124,5 @@ export class JiraCallback implements LambdaInterface {
     }
 }
 
-const handlerClass = new JiraCallback();
+const handlerClass = new JiraCallbackHandler();
 export const lambdaHandler = handlerClass.handler.bind(handlerClass);

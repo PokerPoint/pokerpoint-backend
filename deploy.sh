@@ -12,4 +12,5 @@ sam deploy --stack-name "pokerpoint-backend" \
   --s3-prefix "pokerpoint" \
   --region "${AWS_REGION:-eu-west-2}" \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --parameter-overrides "Environment=production" "BaseDomainName=pokerpoint.co.uk" \
   --profile pokerpoint

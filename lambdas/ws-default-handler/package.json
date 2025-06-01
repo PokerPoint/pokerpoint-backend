@@ -1,0 +1,6 @@
+{
+  "name": "ws-default-handler",
+  "dependencies": {
+    "aws-sdk": "^2.1692.0"
+  }
+}
