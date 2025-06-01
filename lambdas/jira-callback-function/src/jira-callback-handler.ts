@@ -2,10 +2,15 @@ import {LambdaInterface} from "@aws-lambda-powertools/commons";
 import {Logger} from "@aws-lambda-powertools/logger";
 import {APIGatewayEvent, APIGatewayProxyResult, Context} from "aws-lambda";
 import {DynamoDBClient, PutItemCommand} from "@aws-sdk/client-dynamodb";
+import {GetSecretValueCommand, SecretsManagerClient} from "@aws-sdk/client-secrets-manager";
 
 const logger = new Logger({ serviceName: "JiraCallback" });
 const dynamodbClient = new DynamoDBClient();
+const secretsManager = new SecretsManagerClient({});
+
 const jiraTable = process.env.JiraTable;
+const atlassianSecret = process.env.AtlassianSecret;
+const baseDomainName = process.env.BaseDomainName;
 
 const TTL_SECONDS = 28800; // 8 hours TTL
 
@@ -26,10 +31,12 @@ export class JiraCallbackHandler implements LambdaInterface {
             };
         }
 
-        const clientId = process.env.JiraClientId;
-        const clientSecret = process.env.JiraClientSecret;
-        const redirectUri = "https://api.pokerpoint.co.uk/jira/callback";
-        const frontendUrl = "https://pokerpoint.co.uk/app/index.html";
+        const secretValue = JSON.parse(await getSecretValue(atlassianSecret));
+        const clientId = secretValue.JiraClientId;
+        const clientSecret = secretValue.JiraClientSecret;
+
+        const redirectUri = `https://api.${baseDomainName}/jira/callback`;
+        const frontendUrl = `https://${baseDomainName}/app/index.html`;
 
         try {
             logger.info(`Exchanging code for token (state=${state})`);
@@ -122,6 +129,18 @@ export class JiraCallbackHandler implements LambdaInterface {
             };
         }
     }
+}
+
+async function getSecretValue(secretName: string) {
+    const data = await secretsManager.send(
+        new GetSecretValueCommand({
+            SecretId: secretName,
+        })
+    );
+    if (!data.SecretString) {
+        throw new Error(`No secret found for ${secretName}`);
+    }
+    return data.SecretString;
 }
 
 const handlerClass = new JiraCallbackHandler();

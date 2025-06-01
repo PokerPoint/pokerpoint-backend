@@ -22,6 +22,11 @@ Globals:
     MemorySize: 1024
 
 Resources:
+  AtlassianSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: Client ID and Secret for authentication with Atlassian
+
   JiraTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -221,11 +226,15 @@ Resources:
       Environment:
         Variables:
           JiraTable: !Ref JiraTable
-          JiraClientId: HDIuLGOg69GDy95TMXopOPGXJAdN0sdf
-          JiraClientSecret: ATOAmku1s7OoSlC0i-uwCJq3gW4xniw24RIk56ewym2estODGCTUEyzwFbXul8SK6uFRE68BA592
+          AtlassianSecret: !Ref AtlassianSecret
+          BaseDomainName: !Ref BaseDomainName
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JiraTable
+        - Statement:
+            Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Ref AtlassianSecret
 
   JiraCallbackFunctionLogGroup:
     Type: AWS::Logs::LogGroup
