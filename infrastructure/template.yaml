@@ -228,6 +228,7 @@ Resources:
           JiraTable: !Ref JiraTable
           AtlassianSecret: !Ref AtlassianSecret
           BaseDomainName: !Ref BaseDomainName
+          Environment: !Ref Environment
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JiraTable

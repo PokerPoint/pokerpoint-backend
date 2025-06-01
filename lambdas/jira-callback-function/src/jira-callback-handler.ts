@@ -11,6 +11,7 @@ const secretsManager = new SecretsManagerClient({});
 const jiraTable = process.env.JiraTable;
 const atlassianSecret = process.env.AtlassianSecret;
 const baseDomainName = process.env.BaseDomainName;
+const environment = process.env.Environment;
 
 const TTL_SECONDS = 28800; // 8 hours TTL
 
@@ -35,7 +36,7 @@ export class JiraCallbackHandler implements LambdaInterface {
         const clientId = secretValue.JiraClientId;
         const clientSecret = secretValue.JiraClientSecret;
 
-        const redirectUri = `https://api.${baseDomainName}/jira/callback`;
+        const redirectUri = `https://api.${environment}.${baseDomainName}/jira/callback`;
         const frontendUrl = `https://${baseDomainName}/app/index.html`;
 
         try {
