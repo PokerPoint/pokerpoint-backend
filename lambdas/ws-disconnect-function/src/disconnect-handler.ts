@@ -36,8 +36,12 @@ export class DisconnectHandler implements LambdaInterface {
                         connectionId: { S: connectionId }
                     }
                 }));
+
+                const userId = item.userId.S;
                 const connections = await getRoomConnections(roomId);
-                await broadcastUserDisconnect(connectionId, connections)
+
+                await broadcastUserDisconnect(userId, connections)
+                await closeDuplicateConnections(roomId, connections, userId);
             }
 
             return { statusCode: 200 }
@@ -46,6 +50,30 @@ export class DisconnectHandler implements LambdaInterface {
                 logger.error("An error occurred: " + error.message);
             }
             return { statusCode: 500 }
+        }
+    }
+}
+
+async function closeDuplicateConnections(roomId: string, connections, userId: string) {
+    logger.info("Entry closeDuplicateConnections");
+    for (const connection of connections) {
+        try {
+            const connectionId = connection.connectionId.S;
+            if (connection.userId.S == userId) {
+                await dynamodbClient.send(new DeleteItemCommand({
+                    TableName: connectionsTable,
+                    Key: {
+                        roomId: {S: roomId},
+                        connectionId: {S: connectionId}
+                    }
+                }));
+
+                await apiGateway.deleteConnection({
+                    ConnectionId: connectionId
+                }).promise();
+            }
+        } catch (error) {
+            logger.info(error.message);
         }
     }
 }
