@@ -37,7 +37,7 @@ export class DefaultHandler implements LambdaInterface {
             switch (action) {
                 case 'join':
                     if(!await isUserInRoom(roomId, connectionId)) {
-                        await handleUserJoin(body.displayName, roomId, connectionId);
+                        await handleUserJoin(body.displayName, roomId, connectionId, body.userId);
                     } else {
                         logger.info(connectionId + " is already in the room");
                     }
@@ -51,7 +51,7 @@ export class DefaultHandler implements LambdaInterface {
                     break;
                 case 'vote':
                     if(await isUserInRoom(roomId, connectionId)) {
-                        await handleVote(body.vote, connections, roomId, connectionId);
+                        await handleVote(body.vote, connections, roomId, connectionId, body.userId);
                     } else {
                         logger.info(connectionId + " is not part of room " + roomId);
                     }
@@ -196,7 +196,7 @@ async function resetVotes(roomId: string) {
 }
 
 
-async function handleVote(vote: string, connections: any, roomId: string, connectionId: string) {
+async function handleVote(vote: string, connections: any, roomId: string, connectionId: string, userId: string) {
     logger.info("Entry handleVote")
     await dynamodbClient.send(new PutItemCommand({
         TableName: voteTable,
@@ -205,7 +205,7 @@ async function handleVote(vote: string, connections: any, roomId: string, connec
                 S: roomId
             },
             connectionId: {
-                S: connectionId
+                S: userId
             },
             vote: {
                 S: vote
@@ -216,22 +216,31 @@ async function handleVote(vote: string, connections: any, roomId: string, connec
         }
     }));
 
-    await broadcast("vote", { userId: connectionId }, connections);
+    await broadcast("vote", { userId: userId }, connections);
 }
 
-async function handleUserJoin(displayName: string, roomId: string, connectionId: string) {
+async function handleUserJoin(displayName: string, roomId: string, connectionId: string, userId: string) {
     logger.info("Entry handleUserJoin")
-    await saveConnection(roomId, connectionId, displayName);
+    await saveConnection(roomId, connectionId, displayName, userId);
 
     const rooms = await getRoom(roomId);
     const room = rooms.Items[0]
     const roomName = room.roomName.S;
     const cards = room.cards.L;
     const connections = await getRoomConnections(roomId);
+
     const participants = connections.map(participant => ({
-        userId: participant.connectionId.S,
+        userId: participant.userId.S,
         displayName: participant.displayName.S
     })) ?? [];
+    const uniqueParticipantsMap = new Map();
+    participants.forEach(participant => {
+        if (!uniqueParticipantsMap.has(participant.userId)) {
+            uniqueParticipantsMap.set(participant.userId, participant);
+        }
+    });
+    const uniqueParticipants = Array.from(uniqueParticipantsMap.values());
+
     const card = room.ticketName.S;
     const votes = await getVotedUsers(roomId);
     const ownerUUID = room.ownerUUID.S;
@@ -246,14 +255,14 @@ async function handleUserJoin(displayName: string, roomId: string, connectionId:
                 roomName: roomName,
                 cards: cards.map(item => item.S),
                 card: card,
-                participants: participants,
+                participants: uniqueParticipants,
                 votes: votes,
                 ownerUUID: ownerUUID
             }
         })
     }).promise();
 
-    await broadcastUserJoin(roomId, displayName, connectionId, connections);
+    await broadcastUserJoin(roomId, displayName, userId, connections);
 }
 
 async function removeUser(roomId: string, connectionId: string) {
@@ -339,7 +348,7 @@ async function getVotes(roomId: string) {
     }));
 }
 
-async function saveConnection(roomId: string, connectionId: string, displayName: string) {
+async function saveConnection(roomId: string, connectionId: string, displayName: string, userId: string) {
     logger.info("Entry saveConnection")
     await dynamodbClient.send(new PutItemCommand({
         TableName: connectionsTable,
@@ -349,6 +358,9 @@ async function saveConnection(roomId: string, connectionId: string, displayName:
             },
             connectionId: {
                 S: connectionId
+            },
+            userId: {
+                S: userId
             },
             displayName: {
                 S: displayName
