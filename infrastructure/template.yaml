@@ -213,6 +213,29 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${AWS::StackName}/CreateRoomFunction
       RetentionInDays: 7
 
+  CheckRoomFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Sourcemap: true
+    Properties:
+      Handler: lambdas/check-room-function/src/check-room-handler.lambdaHandler
+      LoggingConfig:
+        LogGroup: !Sub /aws/lambda/${AWS::StackName}/CheckRoomFunction
+      Environment:
+        Variables:
+          RoomTable: !Ref RoomTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RoomTable
+
+  CheckRoomFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AWS::StackName}/CheckRoomFunction
+      RetentionInDays: 7
+
   JiraCallbackFunction:
     Type: AWS::Serverless::Function
     Metadata:
