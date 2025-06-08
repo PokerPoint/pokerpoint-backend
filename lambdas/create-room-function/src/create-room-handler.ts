@@ -4,6 +4,7 @@ import {ConditionalCheckFailedException, DynamoDBClient, PutItemCommand} from "@
 import { v4 } from 'uuid';
 import {APIGatewayEvent, APIGatewayProxyResult, Context} from "aws-lambda";
 import {CreateRoomInput} from "./create-room-input";
+import {sanitize} from "../../_util/sanitize";
 
 const logger = new Logger({ serviceName: "CreateRoomFunction" });
 const dynamodbClient = new DynamoDBClient();
@@ -102,9 +103,9 @@ export class CreateRoomHandler implements LambdaInterface {
             throw new Error("userUUID is required and must be a non-empty string");
         }
         return {
-            roomName: body.roomName.trim(),
-            cards: body.cards,
-            userUUID: body.userUUID.trim(),
+            roomName: sanitize(body.roomName.trim()),
+            cards: body.cards.map((card: string) => sanitize(card)),
+            userUUID: sanitize(body.userUUID.trim()),
         };
     }
 }
