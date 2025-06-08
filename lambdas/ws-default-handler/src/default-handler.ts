@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import {APIGatewayEvent} from "aws-lambda";
 import * as AWS from 'aws-sdk';
+import {sanitize} from "../../_util/sanitize";
 
 const logger = new Logger();
 const dynamodbClient = new DynamoDBClient();
@@ -37,21 +38,21 @@ export class DefaultHandler implements LambdaInterface {
             switch (action) {
                 case 'join':
                     if(!await isUserInRoom(roomId, connectionId)) {
-                        await handleUserJoin(body.displayName, roomId, connectionId, body.userId);
+                        await handleUserJoin(sanitize(body.displayName), roomId, connectionId, sanitize(body.userId));
                     } else {
                         logger.info(connectionId + " is already in the room");
                     }
                     break;
                 case 'card':
                     if(await isUserInRoom(roomId, connectionId)) {
-                        await handleSetCard(roomId, connections, body.name);
+                        await handleSetCard(roomId, connections, sanitize(body.name));
                     } else {
                         logger.info(connectionId + " is not part of room " + roomId);
                     }
                     break;
                 case 'vote':
                     if(await isUserInRoom(roomId, connectionId)) {
-                        await handleVote(body.vote, connections, roomId, connectionId, body.userId);
+                        await handleVote(sanitize(body.vote), connections, roomId, connectionId, sanitize(body.userId));
                     } else {
                         logger.info(connectionId + " is not part of room " + roomId);
                     }
