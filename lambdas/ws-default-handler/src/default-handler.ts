@@ -70,6 +70,8 @@ export class DefaultHandler implements LambdaInterface {
                         logger.info(connectionId + " is not part of room " + roomId);
                     }
                     break;
+                case 'heartbeat':
+                    break;
                 default:
                     logger.error("Unknown event " + action);
             }
