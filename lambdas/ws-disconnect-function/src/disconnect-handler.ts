@@ -38,10 +38,17 @@ export class DisconnectHandler implements LambdaInterface {
                 }));
 
                 const userId = item.userId.S;
-                const connections = await getRoomConnections(roomId);
+                // The index is eventually consistent, so the deleted row can still come back.
+                const connections = (await getRoomConnections(roomId))
+                    .filter(connection => connection.connectionId.S != connectionId);
 
-                await broadcastUserDisconnect(userId, connections)
-                await closeDuplicateConnections(roomId, connections, userId);
+                // The same user may still be connected from another tab or a reconnect,
+                // so only announce the departure once their last connection has gone.
+                if (connections.some(connection => connection.userId.S == userId)) {
+                    logger.info(userId + " still has an open connection in room " + roomId);
+                } else {
+                    await broadcastUserDisconnect(userId, connections);
+                }
             }
 
             return { statusCode: 200 }
@@ -50,30 +57,6 @@ export class DisconnectHandler implements LambdaInterface {
                 logger.error("An error occurred: " + error.message);
             }
             return { statusCode: 500 }
-        }
-    }
-}
-
-async function closeDuplicateConnections(roomId: string, connections, userId: string) {
-    logger.info("Entry closeDuplicateConnections");
-    for (const connection of connections) {
-        try {
-            const connectionId = connection.connectionId.S;
-            if (connection.userId.S == userId) {
-                await dynamodbClient.send(new DeleteItemCommand({
-                    TableName: connectionsTable,
-                    Key: {
-                        roomId: {S: roomId},
-                        connectionId: {S: connectionId}
-                    }
-                }));
-
-                await apiGateway.deleteConnection({
-                    ConnectionId: connectionId
-                }).promise();
-            }
-        } catch (error) {
-            logger.info(error.message);
         }
     }
 }

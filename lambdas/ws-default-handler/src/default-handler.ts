@@ -30,6 +30,12 @@ export class DefaultHandler implements LambdaInterface {
             const body = JSON.parse(event.body);
             const action = body.action;
             const roomId = body.roomId;
+
+            // Heartbeats only exist to keep the connection from idling out.
+            if (action === 'heartbeat') {
+                return { statusCode: 200 }
+            }
+
             const connections = await getRoomConnections(roomId);
 
             logger.info("Request received", connectionId, body)
@@ -69,8 +75,6 @@ export class DefaultHandler implements LambdaInterface {
                     } else {
                         logger.info(connectionId + " is not part of room " + roomId);
                     }
-                    break;
-                case 'heartbeat':
                     break;
                 default:
                     logger.error("Unknown event " + action);
